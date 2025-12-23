@@ -6686,39 +6686,12 @@ class Dataset:
 
     def __repr__(self) -> str:
         """
-        Return string representation of the dataset.
+        Return a compact textual representation of the dataset showing schema and, when available, a small sample of data.
         
-        - For materialized datasets: Shows table with actual data
-        - For non-materialized datasets: Shows schema structure with placeholders
+        For a materialized dataset, the string includes a table with column names, column types, up to a small number of sample rows, and the total number of rows. For a non-materialized dataset, the string shows the schema (column names and types) and a placeholder indicating the dataset is not materialized. If the schema is unavailable, returns the dataset's execution plan as a string. Long cell values are truncated in the preview.
         
-        Examples:
-            Non-materialized (shows schema):
-            >>> import ray
-            >>> ds = ray.data.range(100)
-            >>> print(ds)
-            shape: (?, 1)
-            ┌─────┐
-            │ id  │
-            ├╌╌╌╌╌┤
-            │ i64 │
-            ├╌╌╌╌╌┤
-            │ --- │
-            └─────┘
-            (Dataset isn't materialized)
-            
-            Materialized (shows data):
-            >>> ds_mat = ds.materialize()
-            >>> print(ds_mat)
-            shape: (100, 1)
-            ┌─────┐
-            │ id  │
-            ├╌╌╌╌╌┤
-            │ i64 │
-            ├╌╌╌╌╌┤
-            │ 0   │
-            │ 1   │
-            ...
-            └─────┘
+        Returns:
+            str: An ASCII-formatted representation of the dataset's schema and optional sample rows.
         """
         try:
             MAX_COL_WIDTH = 30
