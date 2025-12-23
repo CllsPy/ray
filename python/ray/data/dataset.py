@@ -6685,7 +6685,159 @@ class Dataset:
         return Tab(children, titles=["Metadata", "Schema"])
 
     def __repr__(self) -> str:
-        return self._plan.get_plan_as_string(self.__class__)
+        """
+        Return string representation of the dataset.
+        
+        - For materialized datasets: Shows table with actual data
+        - For non-materialized datasets: Shows schema structure with placeholders
+        
+        Examples:
+            Non-materialized (shows schema):
+            >>> import ray
+            >>> ds = ray.data.range(100)
+            >>> print(ds)
+            shape: (?, 1)
+            ┌─────┐
+            │ id  │
+            ├╌╌╌╌╌┤
+            │ i64 │
+            ├╌╌╌╌╌┤
+            │ --- │
+            └─────┘
+            (Dataset isn't materialized)
+            
+            Materialized (shows data):
+            >>> ds_mat = ds.materialize()
+            >>> print(ds_mat)
+            shape: (100, 1)
+            ┌─────┐
+            │ id  │
+            ├╌╌╌╌╌┤
+            │ i64 │
+            ├╌╌╌╌╌┤
+            │ 0   │
+            │ 1   │
+            ...
+            └─────┘
+        """
+        try:
+            MAX_COL_WIDTH = 50
+            MAX_ROWS = 10
+            is_materialized = self._plan.has_computed_output()
+            
+    
+            schema = self.schema(fetch_if_missing=False)
+            
+            if schema is None or isinstance(schema, type):
+
+                return self._plan.get_plan_as_string(self.__class__)
+            
+            cols = schema.names
+            if not cols:
+                return self._plan.get_plan_as_string(self.__class__)
+            
+            
+            def format_type(dtype):
+                type_str = dtype.__name__ if hasattr(dtype, '__name__') else str(dtype)
+                type_map = {
+                    'int64': 'i64', 'int32': 'i32', 'int16': 'i16', 'int8': 'i8',
+                    'uint64': 'u64', 'uint32': 'u32', 'uint16': 'u16', 'uint8': 'u8',
+                    'float64': 'f64', 'double': 'f64',
+                    'float32': 'f32', 'float': 'f32',
+                    'string': 'str', 'str': 'str',
+                    'bool': 'bool', 'boolean': 'bool',
+                }
+                for key, val in type_map.items():
+                    if key in type_str.lower():
+                        return val
+                return type_str
+            
+            types = [format_type(t) for t in schema.types]
+            
+         
+            values = None
+            if is_materialized:
+                try:
+                    rows = self.take(MAX_ROWS)
+                    if rows:
+                        first = rows[0]
+                        if isinstance(first, dict):
+                            values = [[r.get(c, None) for c in cols] for r in rows]
+                        elif hasattr(first, '_fields'):
+                            values = [list(r) for r in rows]
+                        else:
+                            values = [list(r) for r in rows]
+                except:
+                    pass
+            
+     
+            def format_value(v):
+                if v is None:
+                    return 'null'
+                s = str(v)
+                if len(s) > MAX_COL_WIDTH:
+                    return s[:MAX_COL_WIDTH-3] + '...'
+                return s
+            
+           
+            col_widths = []
+            for i, (col, typ) in enumerate(zip(cols, types)):
+              
+                width = max(len(str(col)), len(typ), 3)
+                
+                
+                if values:
+                    value_width = max(len(format_value(v[i])) for v in values)
+                    width = max(width, value_width)
+                
+                
+                width = min(width, MAX_COL_WIDTH)
+                col_widths.append(width)
+            
+        
+            def fmt_row(items):
+                formatted = [format_value(it).ljust(w) for it, w in zip(items, col_widths)]
+                return "│ " + " ┆ ".join(formatted) + " │"
+            
+          
+            top_sep = "┌─" + "─┬─".join("─" * w for w in col_widths) + "─┐"
+            mid_sep = "├╌" + "╌┼╌".join("╌" * w for w in col_widths) + "╌┤"
+            bot_sep = "└─" + "─┴─".join("─" * w for w in col_widths) + "─┘"
+            
+  
+            table = []
+            table.append(top_sep)
+            table.append(fmt_row(cols))
+            table.append(mid_sep)
+            table.append(fmt_row(types))
+            table.append(mid_sep)
+            
+            if values:
+
+                for v in values:
+                    table.append(fmt_row(v))
+            else:
+                table.append(fmt_row(["---"] * len(cols)))
+            
+            table.append(bot_sep)
+            
+            if is_materialized:
+                total_rows = self.count()
+                shape = f"shape: ({total_rows}, {len(cols)})"
+                
+                if values and total_rows > len(values):
+                    footer = f"\n... with {total_rows - len(values)} more rows"
+                else:
+                    footer = ""
+            else:
+                count = self._meta_count()
+                shape = f"shape: ({count if count else '?'}, {len(cols)})"
+                footer = "\n(Dataset isn't materialized)"
+            
+            return f"{shape}\n{'\n'.join(table)}{footer}"
+    
+        except Exception:
+            return self._plan.get_plan_as_string(self.__class__)
 
     def __str__(self) -> str:
         return repr(self)
