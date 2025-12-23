@@ -6721,7 +6721,7 @@ class Dataset:
             └─────┘
         """
         try:
-            MAX_COL_WIDTH = 50
+            MAX_COL_WIDTH = 30
             MAX_ROWS = 10
             is_materialized = self._plan.has_computed_output()
             
